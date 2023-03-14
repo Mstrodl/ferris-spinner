@@ -1,5 +1,5 @@
 [package]
-name = "ferris_spinner"
+name = "ferris-spinner"
 version = "0.1.0"
 edition = "2021"
 

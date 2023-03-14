@@ -35,6 +35,12 @@ fn hello_world_system(
   mut sprite_position: Query<(&mut Ferris, &mut Transform)>,
   devcade_controls: DevcadeControls,
 ) {
+  if devcade_controls.pressed(Player::P1, Button::Menu)
+    || devcade_controls.pressed(Player::P2, Button::Menu)
+  {
+    std::process::exit(0);
+  }
+
   for (_, mut transform) in &mut sprite_position {
     if devcade_controls.pressed(Player::P1, Button::StickLeft) {
       transform.translation.x -= 200.0 * time.delta_seconds();
