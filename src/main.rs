@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::prelude::*;
 use bevy::window::WindowMode;
 use devcaders::{Button, DevcadeControls, Player};
@@ -11,28 +13,84 @@ fn main() {
       }),
       ..default()
     }))
-    .add_systems((setup_system.on_startup(), hello_world_system))
+    .add_systems((setup_system.on_startup(), hello_world_system, spin_system))
     .run();
 }
 
 fn setup_system(mut commands: Commands, asset_server: Res<AssetServer>) {
-  commands.spawn(Camera2dBundle::default());
+  let crab = asset_server.load("ferris.glb#Scene0");
+  // ferris
   commands.spawn((
-    Ferris {},
-    SpriteBundle {
-      texture: asset_server.load("ferris.png"),
-      transform: Transform::from_xyz(100., 0., 0.),
+    SceneBundle {
+      scene: crab,
+      transform: Transform::from_xyz(0.0, -0.2, 0.0),
       ..default()
     },
+    Ferris,
+  ));
+  // light
+  commands.spawn(PointLightBundle {
+    point_light: PointLight {
+      intensity: 1500.0,
+      shadows_enabled: true,
+      ..default()
+    },
+    transform: Transform::from_xyz(4.0, 8.0, 4.0),
+    ..default()
+  });
+  // camera
+  commands.spawn((
+    Camera3dBundle {
+      transform: Transform::from_xyz(0., 0., -1.).looking_at(Vec3::ZERO, Vec3::Y),
+      ..default()
+    },
+    Camera { x: 0., y: 0. },
   ));
 }
 
+#[derive(Component, Debug)]
+struct Camera {
+  pub x: f32,
+  pub y: f32,
+}
+
+const CAMERA_SPEED: f32 = PI / 1.;
+
+const CAM_DISTANCE: f32 = 1.;
+
+const CRAB_SPEED: f32 = 0.05;
+
 #[derive(Component)]
-struct Ferris {}
+struct Ferris;
+
+fn spin_system(
+  time: Res<Time>,
+  mut camera_transform: Query<(&mut Transform, &mut Camera)>,
+  devcade_controls: DevcadeControls,
+) {
+  for (mut transform, _) in &mut camera_transform {
+    let mut x = 0.;
+    let mut y = 0.;
+    if devcade_controls.pressed(Player::P2, Button::StickLeft) {
+      x -= CAMERA_SPEED * time.delta_seconds();
+    }
+    if devcade_controls.pressed(Player::P2, Button::StickRight) {
+      x += CAMERA_SPEED * time.delta_seconds();
+    }
+    if devcade_controls.pressed(Player::P2, Button::StickDown) {
+      y -= CAMERA_SPEED * time.delta_seconds();
+    }
+    if devcade_controls.pressed(Player::P2, Button::StickUp) {
+      y += CAMERA_SPEED * time.delta_seconds();
+    }
+
+    transform.rotate_around(Vec3::ZERO, Quat::from_euler(EulerRot::YXZ, x, y, 0.));
+  }
+}
 
 fn hello_world_system(
   time: Res<Time>,
-  mut sprite_position: Query<(&mut Ferris, &mut Transform)>,
+  mut sprite_position: Query<(&mut Transform, &Ferris)>,
   devcade_controls: DevcadeControls,
 ) {
   if devcade_controls.pressed(Player::P1, Button::Menu)
@@ -41,18 +99,19 @@ fn hello_world_system(
     std::process::exit(0);
   }
 
-  for (_, mut transform) in &mut sprite_position {
+  for (mut transform, _) in &mut sprite_position {
+    // println!("Transform.translation: {:?}", transform.translation);
     if devcade_controls.pressed(Player::P1, Button::StickLeft) {
-      transform.translation.x -= 200.0 * time.delta_seconds();
+      transform.translation.x -= CRAB_SPEED * time.delta_seconds();
     }
     if devcade_controls.pressed(Player::P1, Button::StickRight) {
-      transform.translation.x += 200.0 * time.delta_seconds();
+      transform.translation.x += CRAB_SPEED * time.delta_seconds();
     }
     if devcade_controls.pressed(Player::P1, Button::StickDown) {
-      transform.translation.y -= 200.0 * time.delta_seconds();
+      transform.translation.y -= CRAB_SPEED * time.delta_seconds();
     }
     if devcade_controls.pressed(Player::P1, Button::StickUp) {
-      transform.translation.y += 200.0 * time.delta_seconds();
+      transform.translation.y += CRAB_SPEED * time.delta_seconds();
     }
   }
   // println!("hello world");
