@@ -13,6 +13,6 @@ devcaders = "0.2.0"
 [dependencies.bevy]
 version = "0.10.0"
 
-[target.'cfg(debug_assertions)'.dependencies.bevy]
-version = "0.10.0"
-features = ["dynamic_linking"]
+# [target.'cfg(debug_assertions)'.dependencies.bevy]
+# version = "0.10.0"
+# features = ["dynamic_linking"]
