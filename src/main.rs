@@ -41,7 +41,7 @@ fn setup_system(mut commands: Commands, asset_server: Res<AssetServer>) {
   // camera
   commands.spawn((
     Camera3dBundle {
-      transform: Transform::from_xyz(0., 0., -1.).looking_at(Vec3::ZERO, Vec3::Y),
+      transform: Transform::from_xyz(0., 0., 1.5).looking_at(Vec3::ZERO, Vec3::Y),
       ..default()
     },
     Camera { x: 0., y: 0. },
@@ -59,6 +59,7 @@ const CAMERA_SPEED: f32 = PI / 1.;
 const CAM_DISTANCE: f32 = 1.;
 
 const CRAB_SPEED: f32 = 0.05;
+const ZOOM_SPEED: f32 = 0.5;
 
 #[derive(Component)]
 struct Ferris;
@@ -69,8 +70,18 @@ fn spin_system(
   devcade_controls: DevcadeControls,
 ) {
   for (mut transform, _) in &mut camera_transform {
+    let forward = transform.forward().normalize() * ZOOM_SPEED * time.delta_seconds();
+
+    if devcade_controls.pressed(Player::P2, Button::A1) {
+      transform.translation += forward;
+    }
+    if devcade_controls.pressed(Player::P2, Button::A2) {
+      transform.translation -= forward;
+    }
+
     let mut x = 0.;
     let mut y = 0.;
+
     if devcade_controls.pressed(Player::P2, Button::StickLeft) {
       x -= CAMERA_SPEED * time.delta_seconds();
     }
@@ -78,10 +89,10 @@ fn spin_system(
       x += CAMERA_SPEED * time.delta_seconds();
     }
     if devcade_controls.pressed(Player::P2, Button::StickDown) {
-      y -= CAMERA_SPEED * time.delta_seconds();
+      y += CAMERA_SPEED * time.delta_seconds();
     }
     if devcade_controls.pressed(Player::P2, Button::StickUp) {
-      y += CAMERA_SPEED * time.delta_seconds();
+      y -= CAMERA_SPEED * time.delta_seconds();
     }
 
     transform.rotate_around(Vec3::ZERO, Quat::from_euler(EulerRot::YXZ, x, y, 0.));
