@@ -58,7 +58,7 @@ const CAMERA_SPEED: f32 = PI / 1.;
 
 const CAM_DISTANCE: f32 = 1.;
 
-const CRAB_SPEED: f32 = 0.05;
+const CRAB_SPEED: f32 = 0.5;
 const ZOOM_SPEED: f32 = 0.5;
 
 #[derive(Component)]
