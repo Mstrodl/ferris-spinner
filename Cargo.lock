@@ -1435,9 +1435,9 @@ checksum = "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
 
 [[package]]
 name = "devcaders"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfb1c2cec73b08f5fb05973b39225b111fa1497457c6455a844c8919e44f21de"
+checksum = "0e5328c711233b83400201d4b46bc19de9ae9e4f4bb33d951619d07d0b265f6b"
 dependencies = [
  "bevy",
  "enum-iterator",
