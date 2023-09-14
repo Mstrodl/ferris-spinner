@@ -6,25 +6,33 @@ use bevy::window::WindowMode;
 use bevy_hanabi::prelude::*;
 #[cfg(debug_assertions)]
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use devcaders::{Button, DevcadeControls, Player};
+use devcaders::{Button, DevcadeControls, NfcTagRequestComponent, NfcUserRequestComponent, Player};
 
 fn main() {
   let mut app = App::new();
   app
     .add_plugins(DefaultPlugins.set(WindowPlugin {
-      primary_window: Some(Window {
-        mode: WindowMode::Fullscreen,
-        ..default()
+      primary_window: Some(if cfg!(feature = "devcade") {
+        Window {
+          mode: WindowMode::Fullscreen,
+          ..default()
+        }
+      } else {
+        default()
       }),
       ..default()
     }))
     .add_plugin(HanabiPlugin);
-  #[cfg(debug_assertions)]
-  {
+  if !cfg!(feature = "devcade") {
     app.add_plugin(WorldInspectorPlugin::new());
   }
   app
-    .add_systems((setup_system.on_startup(), hello_world_system, spin_system))
+    .add_systems((
+      setup_system.on_startup(),
+      hello_world_system,
+      spin_system,
+      nfc_system,
+    ))
     .run();
 }
 
@@ -159,7 +167,15 @@ fn setup_system(
   //   },
   //   Camera2d,
   // ));
+
+  commands.spawn((
+    TextBundle::from_section("No user", Default::default()),
+    UserText,
+  ));
 }
+
+#[derive(Component)]
+struct UserText;
 
 #[derive(Component)]
 struct Camera3d;
@@ -271,4 +287,46 @@ fn hello_world_system(
     // }
   }
   // println!("hello world");
+}
+
+#[derive(Component, Deref, DerefMut)]
+struct MyNfcTagRequest(NfcTagRequestComponent);
+#[derive(Component, Deref, DerefMut)]
+struct MyNfcUserRequest(NfcUserRequestComponent);
+fn nfc_system(
+  mut commands: Commands,
+  mut tags_request: Query<(&mut MyNfcTagRequest, Entity)>,
+  mut users_request: Query<(&mut MyNfcUserRequest, Entity)>,
+  mut text: Query<&mut Text, With<UserText>>,
+) {
+  for (mut tags_request, id) in &mut tags_request {
+    if let Some(tag) = tags_request.poll() {
+      println!("Got a response! {tag:?}");
+      commands.entity(id).despawn();
+      if let Ok(Some(tag_id)) = tag {
+        commands.spawn(MyNfcUserRequest(NfcUserRequestComponent::new(tag_id)));
+      }
+    } else {
+      for mut text in &mut text {
+        text.sections[0].value = "No user".to_owned();
+      }
+    }
+  }
+  for (mut users_request, id) in &mut users_request {
+    if let Some(user) = users_request.poll() {
+      // println!("Got a response! {user:?}");
+      commands.entity(id).despawn();
+      if let Ok(user) = user {
+        let username = user["uid"].as_str().unwrap();
+        println!("Username is: {username}");
+        for mut text in &mut text {
+          text.sections[0].value = format!("User: {username}");
+        }
+      }
+    }
+  }
+  if tags_request.is_empty() && users_request.is_empty() {
+    println!("Creating a new request...");
+    commands.spawn(MyNfcTagRequest(NfcTagRequestComponent::new()));
+  }
 }

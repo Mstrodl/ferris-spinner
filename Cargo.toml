@@ -8,11 +8,11 @@ edition = "2021"
 [dependencies]
 bevy-inspector-egui = "0.18.1"
 bevy_hanabi = "0.6.1"
-devcaders = "0.3.0"
+devcaders = "0.4.0"
 
 [dependencies.bevy]
 version = "0.10.0"
 
-# [target.'cfg(debug_assertions)'.dependencies.bevy]
-# version = "0.10.0"
-# features = ["dynamic_linking"]
+[features]
+default = ["bevy/dynamic_linking"]
+devcade = []
