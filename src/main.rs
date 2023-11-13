@@ -4,8 +4,8 @@ use bevy::prelude::*;
 use bevy::render::camera::{Projection::*, ScalingMode};
 use bevy::window::WindowMode;
 use bevy_hanabi::prelude::*;
-#[cfg(debug_assertions)]
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
+// #[cfg(not(feature = "devcade"))]
+// use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use devcaders::{Button, DevcadeControls, NfcTagRequestComponent, NfcUserRequestComponent, Player};
 
 fn main() {
@@ -22,29 +22,24 @@ fn main() {
       }),
       ..default()
     }))
-    .add_plugin(HanabiPlugin);
-  if !cfg!(feature = "devcade") {
-    app.add_plugin(WorldInspectorPlugin::new());
-  }
+    .add_plugins(HanabiPlugin);
+  // #[cfg(not(feature = "devcade"))]
+  // {
+  //   app.add_plugins(WorldInspectorPlugin::new());
+  // }
   app
-    .add_systems((
-      setup_system.on_startup(),
-      hello_world_system,
-      spin_system,
-      nfc_system,
-    ))
+    .add_systems(Update, (hello_world_system, spin_system, nfc_system))
+    .add_systems(Startup, setup_system)
     .run();
 }
 
-#[derive(Resource)]
-struct AudioController(Handle<SpatialAudioSink>);
+#[derive(Component, Default)]
+struct AudioEmitter;
 
 fn setup_system(
   mut commands: Commands,
   mut meshes: ResMut<Assets<Mesh>>,
   mut effects: ResMut<Assets<EffectAsset>>,
-  audio: Res<Audio>,
-  mut spatial_audio_sinks: Res<Assets<SpatialAudioSink>>,
   asset_server: Res<AssetServer>,
 ) {
   let crab = asset_server.load("ferris.glb#Scene0");
@@ -70,35 +65,38 @@ fn setup_system(
   size_gradient1.add_key(0.8, Vec2::splat(0.08 / mul));
   size_gradient1.add_key(1.0, Vec2::splat(0.0));
 
+  let writer = ExprWriter::new();
+
+  let set_position_modifier = SetPositionCone3dModifier {
+    base_radius: writer.lit(0.).expr(),
+    top_radius: writer.lit(1.).expr(),
+    height: writer.lit(20.).expr(),
+    dimension: ShapeDimension::Volume,
+  };
+  let set_velocity_sphere_modifier = SetVelocitySphereModifier {
+    center: writer.lit(Vec3::ZERO).expr(),
+    speed: writer.lit(10.0).expr(),
+  };
+  let set_attribute_modifier =
+    SetAttributeModifier::new(Attribute::LIFETIME, writer.lit(5_f32).expr());
+  let accel_modifier = AccelModifier::new(writer.lit(Vec3::Y * -3.).expr());
+  let color_over_lifetime_modifier = ColorOverLifetimeModifier {
+    gradient: color_gradient1,
+  };
+  let size_over_lifetime_modifier = SizeOverLifetimeModifier {
+    gradient: size_gradient1,
+    ..Default::default()
+  };
   let effect1 = effects.add(
-    EffectAsset {
-      name: "emit:rate".to_string(),
-      capacity: 32768,
-      spawner: Spawner::rate(500.0.into()),
-      ..Default::default()
-    }
-    .with_property("my_accel", graph::Value::Float3(Vec3::new(0., -3., 0.)))
-    .init(InitPositionCone3dModifier {
-      base_radius: 0.,
-      top_radius: 1.,
-      height: 20.,
-      dimension: ShapeDimension::Volume,
-    })
-    // Make spawned particles move away from the emitter origin
-    .init(InitVelocitySphereModifier {
-      center: Vec3::ZERO,
-      speed: 10.0.into(),
-    })
-    .init(InitLifetimeModifier {
-      lifetime: 5_f32.into(),
-    })
-    .update(AccelModifier::constant(Vec3::Y * -3.))
-    .render(ColorOverLifetimeModifier {
-      gradient: color_gradient1,
-    })
-    .render(SizeOverLifetimeModifier {
-      gradient: size_gradient1,
-    }),
+    EffectAsset::new(32768, Spawner::rate(500.0.into()), writer.finish())
+      .with_name("emit:rate")
+      .init(set_position_modifier)
+      // Make spawned particles move away from the emitter origin
+      .init(set_velocity_sphere_modifier)
+      .init(set_attribute_modifier)
+      .update(accel_modifier)
+      .render(color_over_lifetime_modifier)
+      .render(size_over_lifetime_modifier),
   );
 
   commands.spawn((
@@ -143,16 +141,16 @@ fn setup_system(
     Camera3d,
   ));
 
-  let spatial = audio.play_spatial(
-    asset_server.load("shower.ogg"),
-    camera_transform,
-    0.5,
-    Vec3::ZERO,
-  );
-  let spatial = spatial_audio_sinks.get_handle(spatial);
-  commands.insert_resource(AudioController(spatial));
-  // spatial_audio_sinks.get(&spatial).unwrap();
-  // spatial_audio_sinks.add(spatial.unwrap());
+  commands.spawn((
+    Transform::from_xyz(0.0, 0.0, 0.0),
+    AudioEmitter::default(),
+    AudioBundle {
+      source: asset_server.load("shower.ogg"),
+      settings: PlaybackSettings::LOOP.with_spatial(true),
+    },
+  ));
+  let listener = SpatialListener::new(4.0);
+  commands.spawn((SpatialBundle::default(), listener));
 
   // 2d cam
   // commands.spawn((
@@ -192,12 +190,14 @@ struct Ferris;
 
 fn spin_system(
   time: Res<Time>,
-  mut camera_transform: Query<(&mut Transform, &mut Projection, &mut Camera3d)>,
+  mut camera_transform: Query<
+    (&mut Transform, &mut Projection, &mut Camera3d),
+    Without<SpatialListener>,
+  >,
   devcade_controls: DevcadeControls,
   mut material: Query<&mut Handle<StandardMaterial>>,
   mut materials: ResMut<Assets<StandardMaterial>>,
-  spatial_audio_sinks: Res<Assets<SpatialAudioSink>>,
-  audio_controller: Res<AudioController>,
+  mut spatial_listeners: Query<&mut Transform, With<SpatialListener>>,
 ) {
   for (mut transform, mut projection, _) in &mut camera_transform {
     let forward = transform.forward().normalize() * ZOOM_SPEED * time.delta_seconds();
@@ -236,31 +236,29 @@ fn spin_system(
       if let Orthographic(_) = *projection {
         *projection = Perspective(PerspectiveProjection { ..default() });
         for material in &mut material {
-          let material = materials.get_mut(&material).unwrap();
+          let material = materials.get_mut(&*material).unwrap();
           material.unlit = false;
         }
       }
     } else if let Orthographic(_) = *projection {
       for material in &mut material {
-        let material = materials.get_mut(&material).unwrap();
+        let material = materials.get_mut(&*material).unwrap();
         material.unlit = true;
       }
     }
 
     transform.rotate_around(Vec3::ZERO, Quat::from_euler(EulerRot::YXZ, x, y, 0.));
 
-    if let Some(spatial_sink) = spatial_audio_sinks.get(&audio_controller.0) {
-      spatial_sink.set_listener_position(*transform, 0.25);
-    }
+    let mut listener_transform = spatial_listeners.single_mut();
+    *listener_transform = *transform;
   }
 }
 
 fn hello_world_system(
   time: Res<Time>,
-  mut sprite_position: Query<(&mut Transform, &Ferris)>,
+  mut sprite_position: Query<(&mut Transform, &Ferris), Without<AudioEmitter>>,
   devcade_controls: DevcadeControls,
-  spatial_audio_sinks: Res<Assets<SpatialAudioSink>>,
-  audio_controller: Res<AudioController>,
+  mut spatial_audio_emitters: Query<&mut Transform, With<AudioEmitter>>,
 ) {
   if devcade_controls.pressed(Player::P1, Button::Menu)
     || devcade_controls.pressed(Player::P2, Button::Menu)
@@ -282,9 +280,9 @@ fn hello_world_system(
     if devcade_controls.pressed(Player::P1, Button::StickUp) {
       transform.translation.y += CRAB_SPEED * time.delta_seconds();
     }
-    // if let Some(spatial_sink) = spatial_audio_sinks.get(&audio_controller.0) {
-    //   spatial_sink.set_emitter_position(transform.translation);
-    // }
+    for mut emitter_transform in &mut spatial_audio_emitters {
+      *emitter_transform = transform.clone();
+    }
   }
   // println!("hello world");
 }

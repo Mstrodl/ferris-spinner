@@ -7,11 +7,12 @@ edition = "2021"
 
 [dependencies]
 bevy-inspector-egui = "0.18.1"
-bevy_hanabi = "0.6.1"
-devcaders = "0.4.0"
+bevy_hanabi = { version = "0.8.0", git = "https://github.com/djeedai/bevy_hanabi" }
+devcaders = "0.6.0"
 
 [dependencies.bevy]
-version = "0.10.0"
+features = ["bevy_audio"]
+version = "0.12.0"
 
 [features]
 default = ["bevy/dynamic_linking"]
